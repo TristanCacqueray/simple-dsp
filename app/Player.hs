@@ -33,9 +33,19 @@ data Player = Player
     , gain :: IORef Float
     , freq :: IORef Float
     , res :: IORef Float
+    , filter :: IORef FilterType
     , iirParams :: IORef IIR.IIRParams
     , iirState :: IORef IIR.IIRState
     }
+
+data FilterType = LowPass | HighPass | BandPass
+    deriving (Eq, Enum, Bounded)
+
+filterName :: FilterType -> Text
+filterName = \case
+    LowPass -> "low-pass"
+    HighPass -> "high-pass"
+    BandPass -> "band-pass"
 
 newPlayer :: FilePath -> IO Player
 newPlayer fp = do
@@ -46,6 +56,7 @@ newPlayer fp = do
         <*> newIORef 1.0
         <*> newIORef freq
         <*> newIORef res
+        <*> newIORef LowPass
         <*> newIORef (IIR.lowPassFilter freq res)
         <*> newIORef IIR.initialIIRState
   where
@@ -146,7 +157,12 @@ main = do
     let resetFilter = do
             freq <- readIORef player.freq
             res <- readIORef player.res
-            let newParams = IIR.lowPassFilter freq res
+            filterType <- readIORef player.filter
+            let mkFilter = case filterType of
+                    LowPass -> IIR.lowPassFilter
+                    HighPass -> IIR.highPassFilter
+                    BandPass -> IIR.bandPassFilter
+            let newParams = mkFilter freq res
             print newParams
             writeIORef player.iirParams newParams
             writeIORef player.iirState IIR.initialIIRState
@@ -164,6 +180,15 @@ main = do
         DearImGui.text (from $ show currentPos)
 
         void $ DearImGui.sliderFloat "gain" player.gain 0 5
+
+        currentFilter <- readIORef player.filter
+        whenM (DearImGui.beginCombo "##sel" (filterName currentFilter)) do
+            forM_ [minBound .. maxBound] \otherFilter -> do
+                when (otherFilter /= currentFilter) do
+                    whenM (DearImGui.selectable (filterName otherFilter)) do
+                        writeIORef player.filter otherFilter
+                        resetFilter
+            DearImGui.endCombo
 
         whenM (DearImGui.sliderFloat "freq" player.freq 0 5000) do
             resetFilter
