@@ -33,6 +33,7 @@ data Player = Player
     , gain :: IORef Float
     , freq :: IORef Float
     , res :: IORef Float
+    , filterEnabled :: IORef Bool
     , filter :: IORef FilterType
     , iirParams :: IORef IIR.IIRParams
     , iirState :: IORef IIR.IIRState
@@ -56,6 +57,7 @@ newPlayer fp = do
         <*> newIORef 1.0
         <*> newIORef freq
         <*> newIORef res
+        <*> newIORef True
         <*> newIORef LowPass
         <*> newIORef (IIR.lowPassFilter freq res)
         <*> newIORef IIR.initialIIRState
@@ -72,12 +74,18 @@ audioCB player buffer = do
         newSamples = SV.map (* currentGain) currentSamples
 
     -- filter
-    iirParams <- readIORef player.iirParams
-    iirState <- readIORef player.iirState
-    let (filteredSamples, newIIRState) = IIR.filterSamples iirParams newSamples iirState
-    writeIORef player.iirState newIIRState
+    filterEnabled <- readIORef player.filterEnabled
+    finalSamples <-
+        if filterEnabled
+            then do
+                iirParams <- readIORef player.iirParams
+                iirState <- readIORef player.iirState
+                let (filteredSamples, newIIRState) = IIR.filterSamples iirParams newSamples iirState
+                writeIORef player.iirState newIIRState
+                pure filteredSamples
+            else pure newSamples
 
-    SV.copy buffer filteredSamples
+    SV.copy buffer finalSamples
     writeIORef (pos player) (currentPos + size)
 
 mainAudio :: Player -> IO AudioDevice
@@ -181,6 +189,8 @@ main = do
 
         void $ DearImGui.sliderFloat "gain" player.gain 0 5
 
+        void $ DearImGui.checkbox "enabled" player.filterEnabled
+        DearImGui.sameLine
         currentFilter <- readIORef player.filter
         whenM (DearImGui.beginCombo "##sel" (filterName currentFilter)) do
             forM_ [minBound .. maxBound] \otherFilter -> do
