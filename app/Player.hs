@@ -173,7 +173,6 @@ main = do
             let newParams = mkFilter freq res
             print newParams
             writeIORef player.iirParams newParams
-            writeIORef player.iirState IIR.initialIIRState
 
     mainGUI keyHandler withTexture \(waveTexture, posTexture) -> withFullscreen do
         text "simple-dsp-player demo"
