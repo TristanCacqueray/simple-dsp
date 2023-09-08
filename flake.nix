@@ -13,7 +13,16 @@
         simple-dsp = hpPrev.callCabal2nix "simple-dsp" self { };
         # Bump requested at https://github.com/ekmett/gl/issues/24
         gl = pkgs.haskell.lib.doJailbreak hpPrev.gl;
-        dear-imgui = pkgs.haskell.lib.doJailbreak hpPrev.dear-imgui;
+        dear-imgui = pkgs.haskell.lib.overrideCabal
+          (pkgs.haskell.lib.doJailbreak hpPrev.dear-imgui) (drv: {
+            src = pkgs.fetchFromGitHub {
+              owner = "haskell-game";
+              repo = "dear-imgui.hs";
+              rev = "eec8b57ce89236456ce9d79c760e6abc5d0c27a3";
+              sha256 = "sha256-JRBfTCBkMJEQBMGG8kZq/nGIaMyioUnQkchVOjiJX3U=";
+              fetchSubmodules = true;
+            };
+          });
       };
       hsPkgs = pkgs.hspkgs.extend haskellExtend;
 

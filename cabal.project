@@ -1,6 +1,0 @@
-packages: .
-
-source-repository-package
-  type: git
-  location: https://github.com/haskell-game/dear-imgui.hs
-  tag: 83681923707519ca612d91d4e14bef9527e9b8eb
