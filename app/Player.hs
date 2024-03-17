@@ -20,7 +20,7 @@ import SDL hiding (Texture)
 
 import Data.Coerce (coerce)
 import Foreign.C.Types (CFloat (..))
-import SimpleDSP.GUI qualified
+import SimpleGUI qualified as GUI
 import SimpleDSP.IIR qualified as IIR
 import SimpleDSP.IO qualified
 import SimpleDSP.Samples (Samples, normalizePos)
@@ -151,13 +151,13 @@ main = do
 
     -- Create sound wave texture
     let withTexture cb = do
-            waveTexture <- SimpleDSP.GUI.create2DTexture 780 240
-            SV.unsafeWith (SimpleDSP.GUI.renderWave waveTexture player.samples) $
-                SimpleDSP.GUI.bindTexture waveTexture
+            waveTexture <- GUI.create2DTexture 780 240
+            SV.unsafeWith (GUI.renderWave waveTexture player.samples) $
+                GUI.bindTexture waveTexture
 
-            posTexture <- SimpleDSP.GUI.create2DTexture 1 240
-            SV.unsafeWith (SimpleDSP.GUI.fill posTexture (0xFF, 0x00, 0x7F)) $
-                SimpleDSP.GUI.bindTexture posTexture
+            posTexture <- GUI.create2DTexture 1 240
+            SV.unsafeWith (GUI.fill posTexture (0xFF, 0x00, 0x7F)) $
+                GUI.bindTexture posTexture
 
             cb (waveTexture, posTexture)
 
@@ -208,9 +208,9 @@ main = do
         DearImGui.progressBar uvPos Nothing
 
         DearImGui.ImVec2 drawPosX drawPosY <- DearImGui.getCursorPos
-        SimpleDSP.GUI.drawTexture waveTexture
+        GUI.drawTexture waveTexture
         DearImGui.setCursorPos =<< newIORef (DearImGui.ImVec2 (drawPosX - 3 + uvPos * 780) drawPosY)
-        SimpleDSP.GUI.drawTexture posTexture
+        GUI.drawTexture posTexture
 
         -- current wave
         let sampleList :: [Float]

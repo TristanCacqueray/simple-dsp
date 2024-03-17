@@ -18,8 +18,8 @@
             src = pkgs.fetchFromGitHub {
               owner = "haskell-game";
               repo = "dear-imgui.hs";
-              rev = "eec8b57ce89236456ce9d79c760e6abc5d0c27a3";
-              sha256 = "sha256-JRBfTCBkMJEQBMGG8kZq/nGIaMyioUnQkchVOjiJX3U=";
+              rev = "b48ef7904b10fe467b07088c452b6a64c1791409";
+              sha256 = "sha256-V0mtzuJW/mbHe7gQlpuKaKP/NdZDKmVef0GXKVerwxo=";
               fetchSubmodules = true;
             };
           });

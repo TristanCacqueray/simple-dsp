@@ -1,6 +1,6 @@
 -- | This module contains the logic to visualize samples using OpenGL textures and dear-imgui.
 -- This code is mostly adapted from dear-imgui image example.
-module SimpleDSP.GUI where
+module SimpleGUI where
 
 import Control.Monad (forM_)
 import Control.Monad.ST (ST, runST)
