@@ -59,6 +59,7 @@ executable simple-dsp-player
   other-modules:  SimpleGUI
   ghc-options:    -threaded -rtsopts -with-rtsopts=-T
   build-depends:
+    , containers
     , dear-imgui < 3
     , gl < 2
     , managed < 2

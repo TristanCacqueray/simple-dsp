@@ -1,7 +1,6 @@
-{- | This module implements IIR filter.
-
- See: http://shepazu.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
--}
+-- | This module implements IIR filter.
+--
+--  See: http://shepazu.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
 module SimpleDSP.IIR (
     -- * Usage
     filterSamples,
@@ -13,6 +12,11 @@ module SimpleDSP.IIR (
     lowPassFilter,
     highPassFilter,
     bandPassFilter,
+
+    -- * Analyze
+    RMSInfo (rmsVolume),
+    mkRMSInfo,
+    updateInfo,
 ) where
 
 import Control.Monad.Trans.State.Strict (StateT (..))
@@ -110,3 +114,34 @@ filterSamplesState params = SV.mapM doApplyIIR
 
 filterSamples :: IIRParams -> Samples -> IIRState -> (Samples, IIRState)
 filterSamples params samples = runIdentity . runStateT (filterSamplesState @Identity params samples)
+
+data RMSInfo = RMSInfo
+    { state :: IIRState
+    , params :: IIRParams
+    , rmsVolume :: Float
+    , rmsDecay :: Float
+    }
+
+mkRMSInfo :: IIRParams -> RMSInfo
+mkRMSInfo params =
+    RMSInfo
+        { params
+        , state = initialIIRState
+        , rmsVolume = 0
+        , rmsDecay = 0
+        }
+
+updateInfo :: RMSInfo -> Samples -> RMSInfo
+updateInfo info samples =
+    let (state, newVolume) = SV.foldl' doUpdateInfo (info.state, info.rmsVolume) samples
+        (rmsVolume, rmsDecay)
+            | newVolume > info.rmsVolume = (newVolume, newVolume / 4)
+            | otherwise = (newVolume - info.rmsDecay, info.rmsDecay)
+     in RMSInfo{state, params = info.params, rmsVolume, rmsDecay}
+  where
+    doUpdateInfo (prevState, prevVolume) sample =
+        let
+            newState = applyIIR info.params sample prevState
+            curVolume = newState.y0 * newState.y0
+         in
+            (newState, max prevVolume curVolume)

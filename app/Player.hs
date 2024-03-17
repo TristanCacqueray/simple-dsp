@@ -5,6 +5,7 @@
 module Main where
 
 import Control.Monad.Managed (managed, managed_, runManaged)
+import Data.Sequence qualified as Seq
 import Data.Vector.Storable qualified as SV
 import Data.Vector.Storable.Mutable qualified as V
 import DearImGui.OpenGL3 qualified
@@ -20,10 +21,10 @@ import SDL hiding (Texture)
 
 import Data.Coerce (coerce)
 import Foreign.C.Types (CFloat (..))
-import SimpleGUI qualified as GUI
 import SimpleDSP.IIR qualified as IIR
 import SimpleDSP.IO qualified
 import SimpleDSP.Samples (Samples, normalizePos)
+import SimpleGUI qualified as GUI
 
 data Player = Player
     { samples :: Samples
@@ -37,6 +38,9 @@ data Player = Player
     , filter :: IORef FilterType
     , iirParams :: IORef IIR.IIRParams
     , iirState :: IORef IIR.IIRState
+    , lowRMS :: IORef (IIR.RMSInfo, HistoryVar)
+    , midRMS :: IORef (IIR.RMSInfo, HistoryVar)
+    , highRMS :: IORef (IIR.RMSInfo, HistoryVar)
     }
 
 data FilterType = LowPass | HighPass | BandPass
@@ -61,6 +65,9 @@ newPlayer fp = do
         <*> newIORef LowPass
         <*> newIORef (IIR.lowPassFilter freq res)
         <*> newIORef IIR.initialIIRState
+        <*> newIORef (IIR.mkRMSInfo (IIR.lowPassFilter 150 2.0), newHistoryVar)
+        <*> newIORef (IIR.mkRMSInfo (IIR.bandPassFilter 5800 2.0), newHistoryVar)
+        <*> newIORef (IIR.mkRMSInfo (IIR.highPassFilter 12000 10.0), newHistoryVar)
   where
     freq = 440
     res = 1
@@ -72,6 +79,16 @@ audioCB player buffer = do
     let size = V.length buffer
         currentSamples = SV.slice currentPos size (samples player)
         newSamples = SV.map (* currentGain) currentSamples
+
+    let updateRMS ioRef = do
+            (rms, var) <- readIORef ioRef
+            let newRMS = IIR.updateInfo rms newSamples
+                newVar = pushHistoryVar newRMS.rmsVolume var
+            writeIORef ioRef (newRMS, newVar)
+
+    updateRMS player.lowRMS
+    updateRMS player.midRMS
+    updateRMS player.highRMS
 
     -- filter
     filterEnabled <- readIORef player.filterEnabled
@@ -96,7 +113,7 @@ mainAudio player = do
                 { SDL.openDeviceFreq = Mandate 44100
                 , SDL.openDeviceFormat = Mandate FloatingLEAudio
                 , SDL.openDeviceChannels = Mandate Mono
-                , SDL.openDeviceSamples = 44100 `div` 10
+                , SDL.openDeviceSamples = 44100 `div` 30
                 , SDL.openDeviceCallback = \format buffer -> case format of
                     FloatingLEAudio -> audioCB player buffer
                     _ -> error "Unsupported audio format"
@@ -199,9 +216,9 @@ main = do
                         resetFilter
             DearImGui.endCombo
 
-        whenM (DearImGui.sliderFloat "freq" player.freq 0 5000) do
+        whenM (DearImGui.sliderFloat "freq" player.freq 0 20000) do
             resetFilter
-        whenM (DearImGui.sliderFloat "res" player.res 0 5) do
+        whenM (DearImGui.sliderFloat "res" player.res 0.001 42) do
             resetFilter
 
         -- progress
@@ -211,6 +228,10 @@ main = do
         GUI.drawTexture waveTexture
         DearImGui.setCursorPos =<< newIORef (DearImGui.ImVec2 (drawPosX - 3 + uvPos * 780) drawPosY)
         GUI.drawTexture posTexture
+
+        renderHistoryVar "LOW" =<< (snd <$> readIORef player.lowRMS)
+        renderHistoryVar "MID" =<< (snd <$> readIORef player.midRMS)
+        renderHistoryVar "HIGH" =<< (snd <$> readIORef player.highRMS)
 
         -- current wave
         let sampleList :: [Float]
@@ -247,3 +268,38 @@ mainLoop window renderUI eventHandler = unlessQuit do
     unlessQuit action = do
         shouldQuit <- traverse eventHandler =<< DearImGui.SDL.pollEventsWithImGui
         unless (or shouldQuit) action
+
+-- Copied from AF
+data HistoryVar = HistoryVar
+    { value :: Float
+    , history :: Seq CFloat
+    }
+
+historySize :: Int
+historySize = 128
+
+newHistoryVar :: HistoryVar
+newHistoryVar = HistoryVar 0 (Seq.replicate historySize 0)
+
+-- | Set the variable value and update the history.
+pushHistoryVar :: Float -> HistoryVar -> HistoryVar
+pushHistoryVar newValue hvar = newHVar
+  where
+    newHVar
+        | prevValue == newValue = hvar
+        | otherwise = HistoryVar newValue newHistory
+    newHistory
+        | Seq.length hvar.history < historySize = newSeq
+        | otherwise = Seq.drop 1 newSeq
+    newSeq = hvar.history Seq.|> CFloat newValue
+    prevValue = case hvar.history of
+        _ Seq.:|> (CFloat x) -> x
+        _ -> 0
+
+renderHistoryVar :: (MonadUnliftIO m) => Text -> HistoryVar -> m ()
+renderHistoryVar name hvar = do
+    -- current value
+    void $! DearImGui.plotLines "##" (toList hvar.history)
+    -- history
+    DearImGui.sameLine
+    void $! DearImGui.text $ name <> ": " <> from (show hvar.value)
