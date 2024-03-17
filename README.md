@@ -22,7 +22,7 @@ Start the audio player by passing a sound file:
 cabal run -O0 exe:simple-dsp-player -- ~/86quantoc.flac
 ```
 
-![simple-dsp](https://github.com/TristanCacqueray/simple-dsp/assets/154392/409f1e3d-57db-4e5f-9e08-60aeea9887df)
+![simple-dsp](https://github.com/TristanCacqueray/simple-dsp/assets/154392/57207ef1-6efe-4b64-9574-d118d1d61471)
 
 
 ## SDL_GL_CreateContext error and nix
