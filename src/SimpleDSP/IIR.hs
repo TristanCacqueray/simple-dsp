@@ -1,6 +1,7 @@
 -- | This module implements IIR filter.
 --
 --  See: http://shepazu.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
+--   Or: https://www.w3.org/TR/audio-eq-cookbook/
 module SimpleDSP.IIR (
     -- * Usage
     filterSamples,
@@ -12,6 +13,10 @@ module SimpleDSP.IIR (
     lowPassFilter,
     highPassFilter,
     bandPassFilter,
+    bandPassSkirtFilter,
+    notchFilter,
+    lowShelfFilter,
+    highShelfFilter,
 
     -- * Analyze
     RMSInfo (rmsVolume),
@@ -22,6 +27,7 @@ module SimpleDSP.IIR (
 import Control.Monad.Trans.State.Strict (StateT (..))
 import Data.Functor.Identity (Identity (runIdentity))
 import Data.Vector.Storable qualified as SV
+import GHC.Float (powerFloat)
 import SimpleDSP.Samples
 
 data IIRParams = IIRParams
@@ -65,6 +71,22 @@ highPassFilter freq q =
     w0 = calcW0 freq
     α = calcAQ w0 q
 
+-- | BPF (constant skirt gain, peak gain = Q)
+bandPassSkirtFilter :: Float -> Float -> IIRParams
+bandPassSkirtFilter freq q =
+    IIRParams
+        { b0
+        , b1 = 0
+        , b2 = -1 * b0
+        , a0 = 1 + α
+        , a1 = -2 * cos w0
+        , a2 = 1 - α
+        }
+  where
+    b0 = sin w0 / 2
+    w0 = calcW0 freq
+    α = calcAQ w0 q
+
 bandPassFilter :: Float -> Float -> IIRParams
 bandPassFilter freq q =
     IIRParams
@@ -78,6 +100,54 @@ bandPassFilter freq q =
   where
     w0 = calcW0 freq
     α = calcAQ w0 q
+
+notchFilter :: Float -> Float -> IIRParams
+notchFilter freq q =
+    IIRParams
+        { b0 = 1
+        , b1 = -2 * cos w0
+        , b2 = 1
+        , a0 = 1 + α
+        , a1 = -2 * cos w0
+        , a2 = 1 - α
+        }
+  where
+    w0 = calcW0 freq
+    α = calcAQ w0 q
+
+lowShelfFilter :: Float -> Float -> IIRParams
+lowShelfFilter freq q =
+    IIRParams
+        { b0 = bigA * ((bigA + 1) - (bigA - 1) * cos w0 + bigAsq)
+        , b1 = 2 * bigA * ((bigA - 1) - (bigA + 1) * cos w0)
+        , b2 = bigA * ((bigA + 1) - (bigA - 1) * cos w0 - bigAsq)
+        , a0 = (bigA + 1) + (bigA - 1) * cos w0 + bigAsq
+        , a1 = -2 * ((bigA - 1) + (bigA + 1) * cos w0)
+        , a2 = (bigA + 1) + (bigA - 1) * cos w0 - bigAsq
+        }
+  where
+    bigAsq = 2 * sqrt bigA * α
+    w0 = calcW0 freq
+    α = calcAQ w0 q
+
+highShelfFilter :: Float -> Float -> IIRParams
+highShelfFilter freq q =
+    IIRParams
+        { b0 = bigA * ((bigA + 1) + (bigA - 1) * cos w0 + bigAsq)
+        , b1 = 2 * bigA * ((bigA - 1) + (bigA + 1) * cos w0)
+        , b2 = bigA * ((bigA + 1) + (bigA - 1) * cos w0 - bigAsq)
+        , a0 = (bigA + 1) - (bigA - 1) * cos w0 + bigAsq
+        , a1 = 2 * ((bigA - 1) - (bigA + 1) * cos w0)
+        , a2 = (bigA + 1) - (bigA - 1) * cos w0 - bigAsq
+        }
+  where
+    bigAsq = 2 * sqrt bigA * α
+    w0 = calcW0 freq
+    α = calcAQ w0 q
+
+dbGain, bigA :: Float
+dbGain = -24
+bigA = powerFloat 10 (dbGain / 40)
 
 calcW0 :: Float -> Float
 calcW0 freq = 2 * pi * freq / 44100

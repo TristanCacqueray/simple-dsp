@@ -43,7 +43,7 @@ data Player = Player
     , highRMS :: IORef (IIR.RMSInfo, HistoryVar)
     }
 
-data FilterType = LowPass | HighPass | BandPass
+data FilterType = LowPass | HighPass | BandSkirt | BandPass | Notch | LowShelf | HighShelf
     deriving (Eq, Enum, Bounded)
 
 filterName :: FilterType -> Text
@@ -51,6 +51,10 @@ filterName = \case
     LowPass -> "low-pass"
     HighPass -> "high-pass"
     BandPass -> "band-pass"
+    BandSkirt -> "band-skirt"
+    Notch -> "notch"
+    LowShelf -> "low-shelf"
+    HighShelf -> "high-shelf"
 
 newPlayer :: FilePath -> IO Player
 newPlayer fp = do
@@ -187,6 +191,11 @@ main = do
                     LowPass -> IIR.lowPassFilter
                     HighPass -> IIR.highPassFilter
                     BandPass -> IIR.bandPassFilter
+                    BandSkirt -> IIR.bandPassSkirtFilter
+                    Notch -> IIR.notchFilter
+                    LowShelf -> IIR.lowShelfFilter
+                    HighShelf -> IIR.highShelfFilter
+
             let newParams = mkFilter freq res
             print newParams
             writeIORef player.iirParams newParams
