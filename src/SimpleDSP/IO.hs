@@ -12,7 +12,7 @@ import System.Process.Typed (proc, readProcessStdout)
 
 import SimpleDSP.Samples
 
--- | Normalize input file into a 44100 mono float array.
+-- | Normalize input file into a 44100 mono float array using /ffmpeg/.
 decodeFile :: FilePath -> IO Samples
 decodeFile fname = do
     -- putStrLn $ "Running: ffmpeg " <> unwords args

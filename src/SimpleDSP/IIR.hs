@@ -1,7 +1,9 @@
 -- | This module implements IIR filter.
 --
---  See: http://shepazu.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
---   Or: https://www.w3.org/TR/audio-eq-cookbook/
+--  Reference implementation documentation:
+--
+--   * http://shepazu.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
+--   * https://www.w3.org/TR/audio-eq-cookbook/
 module SimpleDSP.IIR (
     -- * Usage
     filterSamples,
@@ -19,9 +21,11 @@ module SimpleDSP.IIR (
     highShelfFilter,
 
     -- * Analyze
-    RMSInfo (rmsVolume),
+    RMSInfo,
     mkRMSInfo,
     updateInfo,
+    setRMSParams,
+    maxRMSVolume,
 ) where
 
 import Control.Monad.Trans.State.Strict (StateT (..))
@@ -30,6 +34,7 @@ import Data.Vector.Storable qualified as SV
 import GHC.Float (double2Float, float2Double, powerFloat)
 import SimpleDSP.Samples
 
+-- | The filter parameters, create them using one of the design functions like 'lowPassFilter'.
 data IIRParams = IIRParams
     { b0 :: {-# UNPACK #-} Float
     , b1 :: {-# UNPACK #-} Float
@@ -40,7 +45,7 @@ data IIRParams = IIRParams
     }
     deriving (Show)
 
--- | A low-pass filter using cutoff frequency and resonance.
+-- | A low-pass filter.
 lowPassFilter :: Float -> Float -> IIRParams
 lowPassFilter freq q =
     IIRParams
@@ -56,6 +61,7 @@ lowPassFilter freq q =
     w0 = calcW0 freq
     α = calcAQ w0 q
 
+-- | A high-pass filter.
 highPassFilter :: Float -> Float -> IIRParams
 highPassFilter freq q =
     IIRParams
@@ -87,6 +93,7 @@ bandPassSkirtFilter freq q =
     w0 = calcW0 freq
     α = calcAQ w0 q
 
+-- | A band-pass filter.
 bandPassFilter :: Float -> Float -> IIRParams
 bandPassFilter freq q =
     IIRParams
@@ -101,6 +108,7 @@ bandPassFilter freq q =
     w0 = calcW0 freq
     α = calcAQ w0 q
 
+-- | A notch filter.
 notchFilter :: Float -> Float -> IIRParams
 notchFilter freq q =
     IIRParams
@@ -115,6 +123,7 @@ notchFilter freq q =
     w0 = calcW0 freq
     α = calcAQ w0 q
 
+-- | A low-shelf filter.
 lowShelfFilter :: Float -> Float -> IIRParams
 lowShelfFilter freq q =
     IIRParams
@@ -130,6 +139,7 @@ lowShelfFilter freq q =
     w0 = calcW0 freq
     α = calcAQ w0 q
 
+-- | A high-shelf filter.
 highShelfFilter :: Float -> Float -> IIRParams
 highShelfFilter freq q =
     IIRParams
@@ -155,6 +165,7 @@ calcW0 freq = 2 * pi * freq / 44100
 calcAQ :: Float -> Float -> Float
 calcAQ w0 q = sin w0 / (2 * q)
 
+-- | The internal representation of the filter state. Initialize with 'initialIIRState'.
 data IIRState = IIRState
     { x0 :: {-# UNPACK #-} Float
     , x1 :: {-# UNPACK #-} Float
@@ -165,6 +176,7 @@ data IIRState = IIRState
     }
     deriving (Show)
 
+-- | The initial default 'IIRState'.
 initialIIRState :: IIRState
 initialIIRState = IIRState 0 0 0 0 0 0
 
@@ -182,15 +194,18 @@ filterSamplesState params = SV.mapM doApplyIIR
         let newState = applyIIR params curSample curState
         pure (newState.y0, newState)
 
+-- | Filter the 'Samples' and return an updated 'IIRState'.
 filterSamples :: IIRParams -> Samples -> IIRState -> (Samples, IIRState)
 filterSamples params samples = runIdentity . runStateT (filterSamplesState @Identity params samples)
 
+-- | The internal RMS state helpers, create with 'mkRMSInfo' and use with 'updateInfo'.
 data RMSInfo = RMSInfo
     { state :: IIRState
     , params :: IIRParams
     , rmsVolume :: Float
     }
 
+-- | Create a RMSInfo structure.
 mkRMSInfo :: IIRParams -> RMSInfo
 mkRMSInfo params =
     RMSInfo
@@ -199,6 +214,15 @@ mkRMSInfo params =
         , rmsVolume = 0
         }
 
+-- | Get the maximum RMS volume of the last update.
+maxRMSVolume :: RMSInfo -> Float
+maxRMSVolume info = info.rmsVolume
+
+-- | Update the RMSInfo filter params.
+setRMSParams :: IIRParams -> RMSInfo -> RMSInfo
+setRMSParams params info = info{params}
+
+-- | Process 'Samples'.
 updateInfo :: RMSInfo -> Samples -> RMSInfo
 updateInfo info samples =
     let (state, rmsTotal) = SV.foldl' doUpdateInfo (info.state, 0 :: Double) samples
