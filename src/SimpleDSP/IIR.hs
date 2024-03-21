@@ -27,7 +27,7 @@ module SimpleDSP.IIR (
 import Control.Monad.Trans.State.Strict (StateT (..))
 import Data.Functor.Identity (Identity (runIdentity))
 import Data.Vector.Storable qualified as SV
-import GHC.Float (powerFloat)
+import GHC.Float (double2Float, float2Double, powerFloat)
 import SimpleDSP.Samples
 
 data IIRParams = IIRParams
@@ -189,7 +189,6 @@ data RMSInfo = RMSInfo
     { state :: IIRState
     , params :: IIRParams
     , rmsVolume :: Float
-    , rmsDecay :: Float
     }
 
 mkRMSInfo :: IIRParams -> RMSInfo
@@ -198,20 +197,18 @@ mkRMSInfo params =
         { params
         , state = initialIIRState
         , rmsVolume = 0
-        , rmsDecay = 0
         }
 
 updateInfo :: RMSInfo -> Samples -> RMSInfo
 updateInfo info samples =
-    let (state, newVolume) = SV.foldl' doUpdateInfo (info.state, info.rmsVolume) samples
-        (rmsVolume, rmsDecay)
-            | newVolume > info.rmsVolume = (newVolume, newVolume / 4)
-            | otherwise = (newVolume - info.rmsDecay, info.rmsDecay)
-     in RMSInfo{state, params = info.params, rmsVolume, rmsDecay}
+    let (state, rmsTotal) = SV.foldl' doUpdateInfo (info.state, 0 :: Double) samples
+        rmsVolume = double2Float $ sqrt (rmsTotal / fromIntegral (SV.length samples))
+     in RMSInfo{state, params = info.params, rmsVolume}
   where
     doUpdateInfo (prevState, prevVolume) sample =
         let
             newState = applyIIR info.params sample prevState
-            curVolume = newState.y0 * newState.y0
+            newSample = float2Double newState.y0
+            curVolume = newSample * newSample
          in
             (newState, max prevVolume curVolume)
