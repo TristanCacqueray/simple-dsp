@@ -105,8 +105,12 @@ renderWave texture samples = runST doRenderWave
 
         forM_ [0 .. width - 1] \x -> do
             -- compute the maximum sample value matching the current column
-            let start = chunkSize * fromIntegral x
-                chunk = VS.slice (floor start) (floor chunkSize) samples
+            let start = floor $ chunkSize * fromIntegral x
+                end
+                  | start + floor chunkSize > VS.length samples = VS.length samples - start
+                  | otherwise = floor chunkSize
+                chunk = VS.slice start end samples
+
                 sampleValue = clamp (VS.foldl' max 0 chunk)
             -- map the value to the texture height
             let sampleHeight = sampleValue * fromIntegral (texture.textureHeight - 1)

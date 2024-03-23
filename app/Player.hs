@@ -87,7 +87,7 @@ audioCB player buffer = do
     let updateRMS ioRef = do
             (rms, var) <- readIORef ioRef
             let newRMS = IIR.updateInfo rms newSamples
-                newVar = pushHistoryVar newRMS.rmsVolume var
+                newVar = pushHistoryVar (IIR.maxRMSVolume newRMS) var
             writeIORef ioRef (newRMS, newVar)
 
     updateRMS player.lowRMS
