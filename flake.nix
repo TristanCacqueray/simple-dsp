@@ -2,7 +2,7 @@
   nixConfig.bash-prompt = "[nix(simple-dsp)] ";
   inputs = {
     hspkgs.url =
-      "github:podenv/hspkgs/fe0dabfd8acf96f1b5cff55766de6284517868cf";
+      "github:podenv/hspkgs/4750e01093a76c15eef7aa43bab8cd6e285c3fac";
     # "path:///srv/github.com/podenv/hspkgs";
   };
   outputs = { self, hspkgs }:
@@ -13,16 +13,21 @@
         simple-dsp = hpPrev.callCabal2nix "simple-dsp" self { };
         # Bump requested at https://github.com/ekmett/gl/issues/24
         gl = pkgs.haskell.lib.doJailbreak hpPrev.gl;
-        dear-imgui = pkgs.haskell.lib.overrideCabal
-          (pkgs.haskell.lib.doJailbreak hpPrev.dear-imgui) (drv: {
-            src = pkgs.fetchFromGitHub {
-              owner = "haskell-game";
-              repo = "dear-imgui.hs";
-              rev = "b48ef7904b10fe467b07088c452b6a64c1791409";
-              sha256 = "sha256-V0mtzuJW/mbHe7gQlpuKaKP/NdZDKmVef0GXKVerwxo=";
-              fetchSubmodules = true;
-            };
-          });
+        dear-imgui = let pkg = (pkgs.haskell.lib.doJailbreak hpPrev.dear-imgui);
+        in pkgs.haskell.lib.overrideCabal pkg {
+          broken = false;
+          libraryPkgconfigDepends =
+            [ pkgs.SDL2 pkgs.libGL pkgs.libGLU pkgs.glew ];
+          # That attributes is really weird, without it, adding glew to the libraryPkgconfigDepends break pkg-config (no library appears present)
+          __onlyPropagateKnownPkgConfigModules = true;
+          src = pkgs.fetchFromGitHub {
+            owner = "haskell-game";
+            repo = "dear-imgui.hs";
+            rev = "b48ef7904b10fe467b07088c452b6a64c1791409";
+            sha256 = "sha256-V0mtzuJW/mbHe7gQlpuKaKP/NdZDKmVef0GXKVerwxo=";
+            fetchSubmodules = true;
+          };
+        };
       };
       hsPkgs = pkgs.hspkgs.extend haskellExtend;
 
